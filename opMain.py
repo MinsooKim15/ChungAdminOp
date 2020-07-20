@@ -18,7 +18,7 @@ class Admin(object):
         self.guideAddress = "./guide.xlsx"
         self.subAddress = "./subscription.xlsx"
         self.typeAddress = "./type.xlsx"
-        self.credFileName = "credential/homeguide-493c7-firebase-adminsdk-s2e5v-5285f17df0.json"
+        self.credFileName = "homeguide-prd.json"
     def getSubscriptionList(self):
         self.__getSubscriptions()
         self.__getTypes()

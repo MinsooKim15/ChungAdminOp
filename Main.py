@@ -4,8 +4,10 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import pandas as pd
+import sys, getopt
 import math
 import numpy as np
+from PriceRate import *
 
 import inspect,json,os
 from datetime import datetime
@@ -15,9 +17,9 @@ import math
 
 
 class Admin(object):
-    def __init__(self):
+    def __init__(self,fileName):
         self.priceRateFile = "./priceRateFile.xlsx"
-        self.credFileName = "credential/homeguide-493c7-firebase-adminsdk-s2e5v-5285f17df0.json"
+        self.credFileName = fileName
     def __getTypes(self):
         self.typeList = []
         df = pd.read_excel(self.typeAddress)
@@ -81,11 +83,71 @@ class Admin(object):
             doc_ref = self.db.collection(u'guides').document(guide.getId(),merge = True)
             doc_ref.set(guide.toDict())
 
+def getArgv(argv):
+    #기본은 STG로 한다.
+
+    fileName = "./credential/homeguide-stg.json"
+    databaseCategory = ""
+    saveOption = 0
+    try:
+        opts, args = getopt.getopt(argv, "he:s:", ["environment=","saveOption="])
+    except getopt.GetoptError:
+        print("main.py -e <environment> -s <save option>")
+    for opt, arg in opts:
+        if opt == "-h":
+            print("main.py -e <environment> -s <save option>")
+        elif opt in ("-e", "--environment"):
+            if arg in ("prd", "PRD", "PROD", "prod", "production", "PRODUCTION"):
+                fileName = "./credential/homeguide-prd.json"
+            else:
+                fileName = "./credential/homeguide-stg.json"
+        elif opt in ("-s", "--saveOption"):
+            if arg in ("price", "priceRate", "priceOnly"):
+                saveOption = 1
+            else:
+                saveOption = 0
+    return (fileName, saveOption)
+
+
+
+
 if __name__ == "__main__":
-    applyHome = ApplyHome()
-    applyHome.getHomeList(startDate="202007", endDate="202008")
-    applyHome.getHomeDetail()
-    admin = Admin()
-    admin.connectDb()
-    admin.subscriptionList = applyHome.subscriptionList
-    admin.saveSubscriptionToDB()
+
+    fileName, saveOption = getArgv(sys.argv[1:])
+
+    if saveOption == 1:
+        admin = Admin(fileName)
+        admin.connectDb()
+        priceSetting = PriceSetting(fileName = fileName, db = admin.db)
+        # admin.connectDb()
+        priceSetting.getSubscriptions()
+        priceSetting.setPriceRate()
+        priceSetting.saveSubscriptionToDB()
+
+    else:
+        # # 모든 동작 희망할때,
+        applyHome = ApplyHome()
+        admin = Admin(fileName)
+        admin.connectDb()
+        # applyHome.getHomeList(startDate="202007", endDate="202008")
+        # applyHome.getHomeDetail()
+        # admin.subscriptionList = applyHome.subscriptionList
+        # admin.saveSubscriptionToDB()
+        #
+        # applyHome.subscriptionList = []
+        # applyHome.getOfficetelList(startDate="202007", endDate="202008")
+        # applyHome.getOfficetelDetail()
+        # admin.subscriptionList = applyHome.subscriptionList
+        # admin.saveSubscriptionToDB()
+
+        applyHome.subscriptionList = []
+        applyHome.getNoRankList(startDate="202007", endDate="202008")
+        applyHome.getNoRankDetail()
+        admin.subscriptionList = applyHome.subscriptionList
+        admin.saveSubscriptionToDB()
+
+        priceSetting = PriceSetting(fileName,db = admin.db)
+        # admin.connectDb()
+        priceSetting.getSubscriptions()
+        priceSetting.setPriceRate()
+        priceSetting.saveSubscriptionToDB()

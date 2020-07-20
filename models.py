@@ -24,6 +24,7 @@ class Subscription(object):
                  documentLink,
                  dateAnnounce,
                  dateContract,
+                 noRankNotSpecified=False,
                  houseManageNo = None):
         self.id = houseManageNo
         self.title = title
@@ -55,6 +56,7 @@ class Subscription(object):
         self.priceDidSet = False
         self.dateAnnounce = dateAnnounce
         self.dateContract = dateContract
+        self.noRankNotSpecified = noRankNotSpecified
     def getId(self):
         return self.id
 
@@ -144,14 +146,18 @@ class Subscription(object):
             u"typeList" : [],
             u"priceDidSet" : self.priceDidSet,
             u"dateAnnounce" : self.dateAnnounce,
-            u"dateContract" : self.dateContract
+            u"dateContract" : self.dateContract,
+            u"noRankNotSpecified" : self.noRankNotSpecified
         }
         for type in self.typeList:
             dict[u"typeList"].append(type.toDict())
         return dict
     def setPriceRate(self, firstPriceRate, middlePriceRate, finalPriceRate):
+        print("setPriceRate")
         for homeType in self.typeList:
             homeType.setZoneType(self.zoneType)
+            print(homeType.title)
+            print("homeType")
             homeType.setPriceRate(firstPriceRate, middlePriceRate, finalPriceRate)
         self.priceDidSet = True
 
@@ -178,7 +184,8 @@ class Subscription(object):
             dateAnnounce = source[u"dateAnnounce"],
             dateContract= source[u"dateContract"],
             officialLink = source[u"officialLink"],
-            documentLink= source[u"documentLink"]
+            documentLink= source[u"documentLink"],
+            noRankNotSpecified = source[u"noRankNotSpecified"]
         )
         typeList = []
         for homeType in source[u"typeList"]:
@@ -208,6 +215,8 @@ class Type(object):
 
         self.sizeInMeter = float(size)
         self.sizeInPy = self.sizeInMeter * 0.3025
+        self.sizeInMeter = round(self.sizeInMeter, 2)
+        self.sizeInPy = round(self.sizeInPy, 2)
         self.firstPrice = None
         self.middlePrice = None
         self.finalPrice = None
@@ -243,6 +252,16 @@ class Type(object):
         zone3LoanAbleBig = 0.3
         zone4LoanAble = 0.7
         middlePriceLoanLimit = 900000000
+        # 중도금 대출 가능 여부
+        print("중도금 대")
+        print("******************")
+        if self.totalPrice.getNumeric() > middlePriceLoanLimit:
+            print("불가")
+            self.middlePriceLoanAble = False
+        else:
+            print("가능")
+            self.middlePriceLoanAble = True
+
         if (self.zoneType == 1) or (self.zoneType == 2):
             if self.totalPrice.getNumeric() > zone12NoLoanLimit:
                 self.loanLimit = 0
@@ -264,13 +283,10 @@ class Type(object):
                 self.loanLimit = self.totalPrice.getNumeric() * zone3LoanAbleSmall
         else:
             self.loanLimit= self.totalPrice.getNumeric() * zone4LoanAble
-        self.needMoneyFinal = Price(self.finalPrice.getNumeric() - self.loanLimit)
+        self.needMoneyFinal = Price(max([0, (self.finalPrice.getNumeric() - self.loanLimit)]))
+        self.loanLimit = Price(self.loanLimit)
         
-        # 중도금 대출 가능 여부
-        if self.totalPrice.getNumeric() > middlePriceLoanLimit:
-            self.middlePriceLoanAble = False
-        else:
-            self.middlePriceLoanable = True
+
 
 
     def toDict(self):
@@ -283,7 +299,8 @@ class Type(object):
             u"totalPriceText" : self.totalPrice.getText(),
             u"sizeInMeter" : self.sizeInMeter,
             u"sizeInPy" : self.sizeInPy,
-            u"homeTypeCode" : self.id
+            u"homeTypeCode" : self.id,
+            u"middlePriceLoanAble" : self.middlePriceLoanAble
         }
         if self.firstPrice != None:
             dict[u"firstPriceNumeric"] = self.firstPrice.getNumeric()
@@ -301,7 +318,8 @@ class Type(object):
         if self.needMoneyFinal != None:
             dict[u"needMoneyFinal"] = self.needMoneyFinal.getText()
         if self.loanLimit != None:
-            dict[u"loanLimit"] = self.loanLimit
+            dict[u"loanLimitNumeric"] = self.loanLimit.getNumeric()
+            dict[u"loanLimitText"] = self.loanLimit.getText()
 
         return dict
     def getId(self):
@@ -335,7 +353,7 @@ class Price(object):
         print(self.numeric)
         print(self.inText)
     def priceToText(self, price):
-        return str(round(price / 10000, 2)) + "억 원"
+        return str(round(price / 100000000, 2)) + "억 원"
     def getText(self):
         return self.inText
     def getNumeric(self):

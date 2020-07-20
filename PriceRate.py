@@ -14,12 +14,13 @@ import math
 # 얘는 수동입력할 때 쓰는 건데 없어질 겁니다.
 
 
-class Admin(object):
-    def __init__(self):
+class PriceSetting(object):
+    def __init__(self,fileName,db = None):
         self.priceRateFile = "./priceRate.xlsx"
-        self.credFileName = "credential/homeguide-493c7-firebase-adminsdk-s2e5v-5285f17df0.json"
+        self.credFileName = fileName
+        self.db = db
     def getSubscriptions(self):
-        self.connectDb()
+        # self.connectDb()
         sub_ref = self.db.collection(u'subscriptions')
         priceNeedToSet_ref = sub_ref.where(u"priceDidSet",u"==", False)
         docs = priceNeedToSet_ref.stream()
@@ -30,29 +31,26 @@ class Admin(object):
             self.subscriptionList.append(subscription)
 
     def setPriceRate(self):
+        print("admin setPriceRate")
         self.typeList = []
         df = pd.read_excel(self.priceRateFile)
         for i in df.index:
             data = df.iloc[i,]
-            print("찾고 있는 ID:",int(data[u"id"]))
-            print(data[u"middlePriceRate"])
             for subscription in self.subscriptionList:
-                print("청약 id:", subscription.id)
-                if int(subscription.id)== int(data[u"id"]):
+                if int(subscription.id) == int(data[u"id"]):
                     subscription.setPriceRate(firstPriceRate=data[u"firstPriceRate"],
                                               middlePriceRate= data[u"middlePriceRate"],
                                               finalPriceRate= data[u"finalPriceRate"])
     def saveSubscriptionToDB(self):
         # print(subsc)
         for subscription in self.subscriptionList:
-            print(subscription.toDict())
             doc_ref = self.db.collection(u'subscriptions').document(subscription.getId())
             doc_ref.set(subscription.toDict(),merge= True)
-    def connectDb(self):
-        path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-        cred = credentials.Certificate(path + "/" + self.credFileName)
-        firebase_admin.initialize_app(cred)
-        self.db = firestore.client()
+    # def connectDb(self):
+    #     path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+    #     cred = credentials.Certificate(path + "/" + self.credFileName)
+    #     firebase_admin.initialize_app(cred)
+    #     self.db = firestore.client()
 
 
     def getGuideList(self):
@@ -79,10 +77,10 @@ if __name__ == "__main__":
     # applyHome = ApplyHome()
     # applyHome.getHomeList(startDate="202007", endDate="202008")
     # applyHome.getHomeDetail()
-    admin = Admin()
+    priceSetting = PriceSetting()
     # admin.connectDb()
-    admin.getSubscriptions()
-    admin.setPriceRate()
-    admin.saveSubscriptionToDB()
+    priceSetting.getSubscriptions()
+    priceSetting.setPriceRate()
+    priceSetting.saveSubscriptionToDB()
     # admin.subscriptionList = applyHome.subscriptionList
     # admin.saveSubscriptionToDB()
