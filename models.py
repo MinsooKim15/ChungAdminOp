@@ -120,6 +120,19 @@ class Subscription(object):
         for type in types:
             type.setZoneType(self.zoneType)
             self.typeList.append(type)
+    @staticmethod
+    def update(targetSubscription, newSubscription):
+        targetDict = targetSubscription.toDict()
+        newDict = newSubscription.toDict()
+        notUpdateList = [u"priceDidSet", u"typeList"]
+        for key,value in newDict.items():
+            if targetDict[key] != newDict[key]:
+                if key not in notUpdateList:
+                    targetDict[key] = value
+        resultSubscription = Subscription.from_dict(targetDict)
+        resultSubscription.id = targetSubscription.id
+        return resultSubscription
+
     def toDict(self):
         dict = {
             u"title" : self.title,
@@ -276,7 +289,7 @@ class Type(object):
 
         elif self.zoneType == 3:
             if self.totalPrice.getNumeric() > zone3Limit:
-                smallLoanTemp = (self.totalPrice.getNumeric() *zone3LoanAbleSmall)
+                smallLoanTemp = (zone3Limit *zone3LoanAbleSmall)
                 bigLoanTemp = (self.totalPrice.getNumeric() - zone3Limit) * zone3LoanAbleBig
                 self.loanLimit = smallLoanTemp + bigLoanTemp
             else:
@@ -376,3 +389,22 @@ class Guide(object):
         return dict
     def getId(self):
         return self.id
+
+class PriceRate(object):
+    def __init__(self, subscriptionId, firstRate, middleRate, lastRate, id = None):
+        self.id = id
+        self.subscriptionId = subscriptionId
+        self.firstRate = firstRate
+        self.middleRate = middleRate
+        self.lastRate = lastRate
+
+
+    @staticmethod
+    def from_dict(source):
+        priceRate = PriceRate(
+            subscriptionId =  source[u"subscriptionId"],
+            firstRate = source[u"firstRate"],
+            middleRate = source[u"middleRate"],
+            lastRate =source[u"lastRate"]
+        )
+        return priceRate

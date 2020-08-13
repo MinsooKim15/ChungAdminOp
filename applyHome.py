@@ -53,6 +53,10 @@ class ApplyHome(object):
                 homeName = target.get("data-honm")
                 subscriptionType = target.find_all("td")[1].get_text()
                 supplyType = target.find_all("td")[2].get_text()
+                if supplyType == "분양주택":
+                    supplyType = "분양"
+                else:
+                    supplyType = "임대"
                 companyName = target.find_all("td")[4].get_text()
                 home = Home(pbNo = pbNo, homeNo = homeNo, homeName = homeName, subscriptionType= subscriptionType, supplyType = supplyType,companyName = companyName)
                 self.homeList.append(home)
@@ -490,7 +494,7 @@ class ApplyHome(object):
                 homeNo = target.get("data-hmno")
                 homeName = target.get("data-honm")
                 houseSecd = target.get("data-hsecd")
-                supplyType = "분양주택"
+                supplyType = "분양"
                 home = Home(pbNo=pbNo, homeNo=homeNo, homeName=homeName, supplyType =supplyType,houseSecd=houseSecd)
                 self.homeList.append(home)
         print(self.homeList)  # 웹 문서 전체가 출력됩니다.

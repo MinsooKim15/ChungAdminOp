@@ -29,18 +29,35 @@ class PriceSetting(object):
             subscription = Subscription.from_dict(doc.to_dict())
             subscription.id = doc.id
             self.subscriptionList.append(subscription)
-
+    def getPriceRates(self):
+        sub_ref = self.db.collection(u"priceRates")
+        docs = sub_ref.stream()
+        self.priceRateList = []
+        for doc in docs:
+            priceRate = PriceRate.from_dict(doc.to_dict())
+            priceRate.id = doc.id
+            self.priceRateList.append(priceRate)
     def setPriceRate(self):
-        print("admin setPriceRate")
-        self.typeList = []
-        df = pd.read_excel(self.priceRateFile)
-        for i in df.index:
-            data = df.iloc[i,]
+        for priceRate in self.priceRateList:
             for subscription in self.subscriptionList:
-                if int(subscription.id) == int(data[u"id"]):
-                    subscription.setPriceRate(firstPriceRate=data[u"firstPriceRate"],
-                                              middlePriceRate= data[u"middlePriceRate"],
-                                              finalPriceRate= data[u"finalPriceRate"])
+                if int(subscription.id) == int(priceRate.subscriptionId):
+                    subscription.setPriceRate(firstPriceRate = float(priceRate.firstRate),
+                                              middlePriceRate = float(priceRate.middleRate),
+                                              finalPriceRate = float(priceRate.lastRate))
+
+    # 엑셀 쓰던 시절 설정
+    # def setPriceRate(self):
+    #     print("admin setPriceRate")
+    #     self.typeList = []
+    #     df = pd.read_excel(self.priceRateFile)
+    #     for i in df.index:
+    #         data = df.iloc[i,]
+    #         for subscription in self.subscriptionList:
+    #             if int(subscription.id) == int(data[u"id"]):
+    #                 subscription.setPriceRate(firstPriceRate=data[u"firstPriceRate"],
+    #                                           middlePriceRate= data[u"middlePriceRate"],
+    #                                           finalPriceRate= data[u"finalPriceRate"])
+    #
     def saveSubscriptionToDB(self):
         # print(subsc)
         for subscription in self.subscriptionList:

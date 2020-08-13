@@ -51,11 +51,30 @@ class Admin(object):
                     del self.typeList[i]
             print(typeList)
             subscription.addTypeList(typeList)
+    def hasSubscription(self, subscriptionId):
+        doc_ref = self.db.collection(u"subscriptions").document(subscriptionId)
+        returnNull = False
+
+        doc = doc_ref.get()
+        if doc.exists:
+            targetSubscription = Subscription.from_dict(doc.to_dict())
+            return True
+        else:
+            return False
+
+    def updateSubscriptions(self):
+        tempList = []
+        for index, newSubscription in enumerate(self.subscriptionList):
+            if self.hasSubscription(newSubscription.id) == False:
+                del self.subscriptionList[index]
+
     def saveSubscriptionToDB(self):
         # print(subsc)
         for subscription in self.subscriptionList:
             doc_ref = self.db.collection(u'subscriptions').document(subscription.getId())
-            doc_ref.set(subscription.toDict())
+            doc = doc_ref.get()
+            if doc.exists == False:
+                doc_ref.set(subscription.toDict())
     def connectDb(self):
         path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
         cred = credentials.Certificate(path + "/" + self.credFileName)
@@ -121,6 +140,7 @@ if __name__ == "__main__":
         priceSetting = PriceSetting(fileName = fileName, db = admin.db)
         # admin.connectDb()
         priceSetting.getSubscriptions()
+        priceSetting.getPriceRates()
         priceSetting.setPriceRate()
         priceSetting.saveSubscriptionToDB()
 
@@ -129,25 +149,30 @@ if __name__ == "__main__":
         applyHome = ApplyHome()
         admin = Admin(fileName)
         admin.connectDb()
-        # applyHome.getHomeList(startDate="202007", endDate="202008")
-        # applyHome.getHomeDetail()
-        # admin.subscriptionList = applyHome.subscriptionList
-        # admin.saveSubscriptionToDB()
+        applyHome.getHomeList(startDate="202007", endDate="202012")
+        applyHome.getHomeDetail()
+
+        admin.subscriptionList = applyHome.subscriptionList
+        admin.updateSubscriptions()
+        admin.saveSubscriptionToDB()
         #
-        # applyHome.subscriptionList = []
-        # applyHome.getOfficetelList(startDate="202007", endDate="202008")
-        # applyHome.getOfficetelDetail()
-        # admin.subscriptionList = applyHome.subscriptionList
-        # admin.saveSubscriptionToDB()
+        applyHome.subscriptionList = []
+        applyHome.getOfficetelList(startDate="202007", endDate="202012")
+        applyHome.getOfficetelDetail()
+        admin.subscriptionList = applyHome.subscriptionList
+        admin.updateSubscriptions()
+        admin.saveSubscriptionToDB()
 
         applyHome.subscriptionList = []
-        applyHome.getNoRankList(startDate="202007", endDate="202008")
+        applyHome.getNoRankList(startDate="202007", endDate="202012")
         applyHome.getNoRankDetail()
         admin.subscriptionList = applyHome.subscriptionList
+        admin.updateSubscriptions()
         admin.saveSubscriptionToDB()
 
         priceSetting = PriceSetting(fileName,db = admin.db)
         # admin.connectDb()
         priceSetting.getSubscriptions()
+        priceSetting.getPriceRates()
         priceSetting.setPriceRate()
         priceSetting.saveSubscriptionToDB()
