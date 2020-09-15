@@ -536,13 +536,19 @@ class Geocode(object):
     @staticmethod
     def fromApi(address):
         print("CallingApi")
+        import json
+
+        # Opening JSON file
+        f = open('./credential/geocodeAPIKey.json')
+
+        geocodeAPIKey = json.load(f)
         # Cleansing
         address = address.strip()
         address = address.replace(" ","+")
         url = "https://maps.googleapis.com/maps/api/geocode/json"
         params = {
             "address": address,
-            "key": "AIzaSyCMgmvW2J-B1CmoCulq7henI3X1uSjECQ8"
+            "key": geocodeAPIKey["key"]
         }
         parts = urlparse(url)
         parts = parts._replace(query=urlencode(params))
