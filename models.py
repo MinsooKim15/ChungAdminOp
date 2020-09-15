@@ -1,5 +1,10 @@
 import datetime
 import math
+import requests
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+import urllib
+from urllib.request import urlopen
+
 
 class Subscription(object):
     def __init__(self,
@@ -11,6 +16,7 @@ class Subscription(object):
                  subscriptionType,
                  supplyType,
                  noRank,
+                 
                  noRankDate,
                  hasSpecialSupply,
                  dateSpecialSupplyNear,
@@ -25,7 +31,8 @@ class Subscription(object):
                  dateAnnounce,
                  dateContract,
                  noRankNotSpecified=False,
-                 houseManageNo = None):
+                 houseManageNo = None,
+                 imgName = None):
         self.id = houseManageNo
         self.title = title
         self.addressProvinceCode = addressProvinceCode
@@ -57,6 +64,8 @@ class Subscription(object):
         self.dateAnnounce = dateAnnounce
         self.dateContract = dateContract
         self.noRankNotSpecified = noRankNotSpecified
+        self.imgName = imgName
+        self.geocode = None
     def getId(self):
         return self.id
 
@@ -96,7 +105,6 @@ class Subscription(object):
         zoneType3ListInDetail2 = [
             u"산척동", u"동안구", u"수지구", u"기흥구"
         ]
-
         if self.addressProvinceKor in zoneType1ListInProvince:
             return 1
         elif self.addressDetailFirstKor in zoneType1ListInDetail:
@@ -120,18 +128,11 @@ class Subscription(object):
         for type in types:
             type.setZoneType(self.zoneType)
             self.typeList.append(type)
-    @staticmethod
-    def update(targetSubscription, newSubscription):
-        targetDict = targetSubscription.toDict()
-        newDict = newSubscription.toDict()
-        notUpdateList = [u"priceDidSet", u"typeList"]
-        for key,value in newDict.items():
-            if targetDict[key] != newDict[key]:
-                if key not in notUpdateList:
-                    targetDict[key] = value
-        resultSubscription = Subscription.from_dict(targetDict)
-        resultSubscription.id = targetSubscription.id
-        return resultSubscription
+    def updateWithOriginal(self, originalSubscription):
+        # 원본에서 가져올 데이터를 아래에 넣는다.
+        self.imgName = originalSubscription.imgName
+        for index, homeType in enumerate(self.typeList):
+            self.typeList[index].typeImgName = originalSubscription.typeList[index].typeImgName
 
     def toDict(self):
         dict = {
@@ -164,6 +165,10 @@ class Subscription(object):
         }
         for type in self.typeList:
             dict[u"typeList"].append(type.toDict())
+        if self.imgName != None:
+            dict[u"imgName"] = self.imgName
+        if self.geocode != None:
+            dict[u"geocode"] = self.geocode.toDict()
         return dict
     def setPriceRate(self, firstPriceRate, middlePriceRate, finalPriceRate):
         print("setPriceRate")
@@ -173,6 +178,17 @@ class Subscription(object):
             print("homeType")
             homeType.setPriceRate(firstPriceRate, middlePriceRate, finalPriceRate)
         self.priceDidSet = True
+    def updateGeocode(self):
+        if self.geocode == None:
+            addressClean = self.addressProvinceCode + " " + self.addressDetailFirstKor + " " + self.addressDetailSecondKor
+            addressClean = addressClean.replace("\u3000"," ")
+            self.geocode = Geocode.fromApi(addressClean)
+        else:
+            print("이미 있어 미호출")
+
+    def setEstimatedScore(self, scoreList):
+        for index, homeType in enumerate(self.typeList):
+            homeType.estimatedScore = scoreList[index]
 
     @staticmethod
     def from_dict(source):
@@ -206,11 +222,14 @@ class Subscription(object):
         subscription.typeList = typeList
         if u"priceDidSet" in source:
             subscription.priceDidSet = source[u"priceDidSet"]
+        if u"imgName" in source:
+            subscription.imgName = source[u"imgName"]
+        if u"geocode" in source:
+            subscription.geocode = Geocode.fromDict(source[u"geocode"])
         return subscription
 
-
 class Type(object):
-    def __init__(self,homeTypeCode, title, size, generalSupply, specialSupply, totalSupply, totalPrice = None, firstPriceRate = None, middlePriceRate  = None, finalPriceRate  = None):
+    def __init__(self,homeTypeCode, title, size, generalSupply, specialSupply, totalSupply, totalPrice = None, firstPriceRate = None, middlePriceRate  = None, finalPriceRate  = None,typeImgName = None):
         self.id = homeTypeCode
         self.title = str(title)
         if math.isnan(generalSupply):
@@ -237,9 +256,12 @@ class Type(object):
         self.needMoneyFirst = None
         self.needMoneyFinal = None
         self.loanLimit = None
+        self.firstCompetitionRate = None
+        self.secondCompetitionRate = None
+        self.winningScore = None
+        self.typeImgName = typeImgName
+        self.estimatedScore = None
 
-    def setTotalPrice(self,totalPrice):
-        self.totalPrice = Price(totalPrice)
     def setPriceRate(self, firstPriceRate, middlePriceRate, finalPriceRate):
         print("계약금 생성")
         self.firstPrice = Price(self.totalPrice.getNumeric() * firstPriceRate)
@@ -249,7 +271,8 @@ class Type(object):
         # 모든 가격이 정해졌은니 여기서 간단 계산 후 setLoanLimit()에서 최종처리
         self.needMoneyFirst = Price(self.firstPrice.getNumeric() + self.middlePrice.getNumeric())
         self.setLoanLimit()
-
+    def setTotalPrice(self, price):
+        self.totalPrice = Price(price)
     def makeId(self, subId, title):
         return str(subId) + "_" + str(title)
 
@@ -298,9 +321,27 @@ class Type(object):
             self.loanLimit= self.totalPrice.getNumeric() * zone4LoanAble
         self.needMoneyFinal = Price(max([0, (self.finalPrice.getNumeric() - self.loanLimit)]))
         self.loanLimit = Price(self.loanLimit)
-        
+    def setFirstCompetitionRate(self, isFallShort, applicant, rate= None):
+        self.firstCompetitionRate = CompetitionRate(
+            isFallShort=isFallShort,
+            applicant = applicant,
+            supply = 0,
+            rate = rate
+        )
 
-
+    def setWinningScore(self, minScore, maxScore,averageScore):
+        self.winningScore = WinningScore(
+            minScore = minScore,
+            maxScore= maxScore,
+            averageScore = averageScore
+        )
+    def setSecondCompetitionRate(self, isFallShort, applicant,rate= None):
+        self.secondCompetitionRate = CompetitionRate(
+            isFallShort=isFallShort,
+            applicant = applicant,
+            supply = 0,
+            rate = rate
+        )
 
     def toDict(self):
         dict = {
@@ -333,7 +374,16 @@ class Type(object):
         if self.loanLimit != None:
             dict[u"loanLimitNumeric"] = self.loanLimit.getNumeric()
             dict[u"loanLimitText"] = self.loanLimit.getText()
-
+        if self.firstCompetitionRate != None:
+            dict[u"firstCompetitionRate"] = self.firstCompetitionRate.toDict()
+        if self.winningScore != None:
+            dict[u"winningScore"] = self.winningScore.toDict()
+        if self.secondCompetitionRate != None:
+            dict[u"secondCompetitionRate"] = self.secondCompetitionRate.toDict()
+        if self.estimatedScore != None:
+            dict[u"estimatedScore"] = self.estimatedScore
+        if self.typeImgName != None:
+            dict[u"typeImgName"] = self.typeImgName
         return dict
     def getId(self):
         return self.id
@@ -349,9 +399,29 @@ class Type(object):
             totalSupply = source[u"totalSupply"]
         )
         # TODO : setTotalPrice만 튀어나온게 보기 싫다.
-        homeType.setTotalPrice(
-            totalPrice = source[u"totalPriceNumeric"]
-        )
+        if u"totalPriceNumeric" in source:
+            homeType.totalPrice = Price(source[u"totalPriceNumeric"])
+        if u"firstPriceNumeric" in source:
+            homeType.firstPrice = Price(source[u"firstPriceNumeric"])
+        if u"middlePriceNumeric" in source:
+            homeType.middlePrice = Price(source[u"middlePriceNumeric"])
+        if u"finalPriceNumeric" in source:
+            homeType.finalPrice = Price(source[u"finalPriceNumeric"])
+        if u"middlePriceLoanable" in source:
+            homeType.middlePriceLoanAble = source[u"middlePriceLoanable"]
+        if u"loanLimitNumeric" in source:
+            homeType.loanLimit = Price(source[u"loanLimitNumeric"])
+        if u"firstCompetitionRate" in source:
+            homeType.firstCompetitionRate = CompetitionRate.from_dict(source[u"firstCompetitionRate"])
+        if u"secondCompetitionRate" in source:
+            homeType.secondCompetitionRate = CompetitionRate.from_dict(source[u"secondCompetitionRate"])
+        if u"winningScore" in source:
+            homeType.winningScore = WinningScore.from_dict(source[u"winningScore"])
+        if u"estimatedScore" in source:
+            homeType.estimatedScore = source[u"estimatedScore"]
+        if u"typeImgName" in source:
+            homeType.typeImgName = source[u"typeImgName"]
+
         return homeType
 
 class Price(object):
@@ -408,3 +478,97 @@ class PriceRate(object):
             lastRate =source[u"lastRate"]
         )
         return priceRate
+
+class CompetitionRate(object):
+    # 경쟁률을 표현하기 위한 모델
+    def __init__(self,isFallShort,applicant, supply = 0, rate = None):
+        # 지원이 미달인가
+        self.isFallShort = isFallShort
+        # 경쟁률(미달이어도 채운다.)
+        if rate == None:
+            self.rate = supply / applicant
+        else:
+            self.rate = rate
+        self.applicant = applicant
+        self.supply = supply
+    def toDict(self):
+        dict = {
+            u"isFallShort" : self.isFallShort,
+            u"rate" : self.rate,
+            u"applicant" : self.applicant,
+            u"supply" : self.supply
+        }
+        return dict
+    @staticmethod
+    def from_dict(source):
+        competitionRate = CompetitionRate(
+            isFallShort = source[u"isFallShort"],
+            rate = source[u"rate"],
+            applicant = source[u"applicant"],
+            supply = source[u"supply"]
+        )
+        return competitionRate
+class WinningScore(object):
+    def __init__(self,minScore, maxScore, averageScore):
+        self.minScore = minScore
+        self.maxScore = maxScore
+        self.averageScore = averageScore
+    def toDict(self):
+        dict = {
+            u"minScore" : self.minScore,
+            u"maxScore" : self.maxScore,
+            u"averageScore" : self.averageScore
+        }
+        return dict
+
+    @staticmethod
+    def from_dict(source):
+        winningScore = WinningScore(
+            minScore = source["minScore"],
+            maxScore = source["maxScore"],
+            averageScore = source["averageScore"]
+        )
+        return winningScore
+class Geocode(object):
+    def __init__(self,latitude,longitude):
+        self.latitude = latitude
+        self.longitude = longitude
+    @staticmethod
+    def fromApi(address):
+        print("CallingApi")
+        # Cleansing
+        address = address.strip()
+        address = address.replace(" ","+")
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": address,
+            "key": "AIzaSyCMgmvW2J-B1CmoCulq7henI3X1uSjECQ8"
+        }
+        parts = urlparse(url)
+        parts = parts._replace(query=urlencode(params))
+        new_url = urlunparse(parts)
+        result = requests.request("GET", new_url)
+        if result.json()["status"] == "OK":
+            location = result.json()["results"][0]["geometry"]["location"]
+            latitude = location["lat"]
+            longitude = location["lng"]
+        else:
+            latitude = None
+            longitude = None
+        if latitude == None:
+            return None
+        else:
+            return Geocode(latitude=latitude, longitude = longitude)
+
+    def toDict(self):
+        dict = {
+            u"latitude" : self.latitude,
+            u"longitude" : self.longitude
+        }
+        return dict
+    @staticmethod
+    def fromDict(source):
+        if source != None:
+            return Geocode(latitude=source[u"latitude"], longitude=source[u"longitude"])
+        else:
+            return None

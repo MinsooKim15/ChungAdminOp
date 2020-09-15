@@ -1,5 +1,5 @@
 from models import *
-from applyHome import *
+from applyHomeCrawler import *
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
@@ -44,7 +44,6 @@ class PriceSetting(object):
                     subscription.setPriceRate(firstPriceRate = float(priceRate.firstRate),
                                               middlePriceRate = float(priceRate.middleRate),
                                               finalPriceRate = float(priceRate.lastRate))
-
     # 엑셀 쓰던 시절 설정
     # def setPriceRate(self):
     #     print("admin setPriceRate")
